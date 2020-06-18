@@ -1,6 +1,10 @@
 // Setup integTests
 apply from: "${buildScriptDirPath}/integTest.gradle"
 
+configurations {
+  pegasusPlugin
+}
+
 dependencies {
   testImplementation externalDependency.testng
   testImplementation externalDependency.junit

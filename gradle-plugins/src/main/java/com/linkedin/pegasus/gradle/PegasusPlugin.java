@@ -752,12 +752,13 @@ public class PegasusPlugin implements Plugin<Project>
         throw new GradleException("Unable to read pegasus-version.properties file.", e);
       }
 
-      String version = properties.getProperty("pegasus.version");
-
-      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:data:" + version);
-      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:data-avro-generator:" + version);
-      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:generator:" + version);
-      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:restli-tools:" + version);
+//      String version = properties.getProperty("pegasus.version");
+//      version = "27.7.18";
+//
+//      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:data:" + version);
+//      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:data-avro-generator:" + version);
+//      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:generator:" + version);
+//      project.getDependencies().add("pegasusPlugin", "com.linkedin.pegasus:restli-tools:" + version);
     }
     else
     {
