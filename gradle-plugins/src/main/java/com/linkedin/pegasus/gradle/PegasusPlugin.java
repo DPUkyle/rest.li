@@ -766,7 +766,7 @@ public class PegasusPlugin implements Plugin<Project>
           + " are available on the configuration pegasusPlugin",
           project.getPath());
     }
-    project.getDependencies().add("pegasusPlugin", "org.slf4j:slf4j-simple:1.7.2");
+//    project.getDependencies().add("pegasusPlugin", "org.slf4j:slf4j-simple:1.7.2");
     project.getDependencies().add("pegasusPlugin", project.files(System.getProperty("java.home") + "/../lib/tools.jar"));
 
     // this call has to be here because:

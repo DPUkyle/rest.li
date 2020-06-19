@@ -11,27 +11,35 @@ processResources {
   filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: ['version': project.version as String])
 }
 
-//configurations {
-//  localLibsForTesting
-//}
-//
-//dependencies {
-//  localLibsForTesting project(':data')
-//  localLibsForTesting project(':data-avro-generator')
-//  localLibsForTesting project(':generator')
-//  localLibsForTesting project(':restli-tools')
-//  localLibsForTesting project(':pegasus-common')
-//
-//  // both ways work
-//  localLibsForTesting externalDependency.codemodel     //localLibsForTesting 'com.sun.codemodel:codemodel:2.2'
-//  localLibsForTesting externalDependency.slf4jApi      //localLibsForTesting 'org.slf4j:slf4j-simple:1.7.2'
-//  localLibsForTesting externalDependency.jacksonCore
-//  localLibsForTesting externalDependency.commonsIo
-//  localLibsForTesting externalDependency.jsr305      // for some reason this adds v3.0.2 instead of 3.0.0 -it's because 3.0.2 is in the PegasusPlugin.java
-//  localLibsForTesting externalDependency.commonsCli
-//}
-//
-//tasks.pluginUnderTestMetadata {
-//  dependsOn configurations.localLibsForTesting
-//  pluginClasspath.from(configurations.localLibsForTesting)
-//}
+configurations {
+  localLibsForTesting
+}
+
+dependencies {
+  localLibsForTesting project(':data')
+  localLibsForTesting project(':data-avro-generator')
+  localLibsForTesting project(':generator')
+  localLibsForTesting project(':restli-tools')
+  localLibsForTesting project(':pegasus-common')
+
+  // both ways work
+  localLibsForTesting externalDependency.codemodel     //localLibsForTesting 'com.sun.codemodel:codemodel:2.2'
+  localLibsForTesting externalDependency.slf4jApi
+  localLibsForTesting externalDependency.jacksonCore
+  localLibsForTesting externalDependency.commonsIo
+  localLibsForTesting externalDependency.jsr305      // for some reason this adds v3.0.2 instead of 3.0.0 -it's because 3.0.2 is in the PegasusPlugin.java
+  localLibsForTesting externalDependency.commonsCli
+}
+
+tasks.pluginUnderTestMetadata {
+  logger.warn("==========  ASTRO ============")
+  logger.warn("==========   END  ============")
+  dependsOn configurations.localLibsForTesting
+  def libs = []
+  for (File f : configurations.localLibsForTesting.files) {
+    libs.add(f.parent)
+  }
+  pluginClasspath.from(libs)
+
+  //pluginClasspath.from(configurations.localLibsForTesting)
+}
