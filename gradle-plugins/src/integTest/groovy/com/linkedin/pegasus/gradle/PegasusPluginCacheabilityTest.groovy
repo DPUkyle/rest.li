@@ -1,62 +1,59 @@
 package com.linkedin.pegasus.gradle
 
+import groovy.json.JsonOutput
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import spock.lang.Specification
 
-import static org.gradle.testkit.runner.TaskOutcome.*;
+import static org.gradle.testkit.runner.TaskOutcome.*
 
 class PegasusPluginCacheabilityTest extends Specification {
-//  @Rule
-  TemporaryFolder tempDir = new TemporaryFolder()
+  @Rule
+  TemporaryFolder tempDir = new TemporaryFolder() {
+    @Override
+    protected void after() { println 'Not cleaning ' + this.root }
+  }
 
   def 'mainDataTemplateJar tasks are up-to-date'() {
     setup:
     tempDir.create()
+
     def runner = GradleRunner.create()
         .withProjectDir(tempDir.root)
         .withPluginClasspath()
-        .withArguments("mainDataTemplateJar")
-        .forwardOutput()
-        .withDebug(true)
-    /*
-    |  pegasusPlugin 'com.linkedin.pegasus:data:29.3.0'
-    |  pegasusPlugin 'com.linkedin.pegasus:data-avro-generator:29.3.0'
-    |  pegasusPlugin 'com.linkedin.pegasus:generator:29.3.0'
-    |  pegasusPlugin 'com.linkedin.pegasus:restli-tools:29.3.0'
-    |  // below is if i remote the items
-     */
+        .withArguments("mainDataTemplateJar", '-is')
+        //.forwardOutput()
+        //.withDebug(true)
+
+    def settingsFile = tempDir.newFile('settings.gradle')
+    settingsFile << "rootProject.name = 'test-project'"
 
     def buildFile = tempDir.newFile('build.gradle')
-    buildFile << '''
-    |plugins { id 'pegasus' }
-    |dependencies {
-    |  pegasusPlugin 'com.sun.codemodel:codemodel:2.2'
-    |  pegasusPlugin 'org.slf4j:slf4j-api:1.7.30'
-    |  pegasusPlugin 'com.linkedin.pegasus:pegasus-common:29.3.0'
-    |  pegasusPlugin 'com.fasterxml.jackson.core:jackson-core:2.9.7'
-    |  pegasusPlugin 'commons-io:commons-io:2.4'
-    |  dataTemplateCompile 'com.linkedin.pegasus:data:29.3.0'
-    |  pegasusPlugin 'commons-cli:commons-cli:1.0'
+    buildFile << """
+    |plugins { 
+    |  id 'pegasus' 
     |}
-    '''.stripMargin()
-    // Add libs needed to run pegasus plugin
-    buildFile << "\nrepositories {\n  flatDir {\n"
-    for (File f : runner.pluginClasspath) {
-      buildFile << "    dirs '$f'\n"
-    }
-    buildFile << "  }\n}"
+    |
+    |repositories { 
+    |  jcenter()
+    |}
+    |
+    |dependencies {
+    |  dataTemplateCompile files(${System.getProperty('integTest.dataTemplateCompileDependencies')})
+    |  pegasusPlugin files(${System.getProperty('integTest.pegasusPluginDependencies')})
+    |}
+    """.stripMargin()
 
     def pegasusDir = tempDir.newFolder('src', 'main', 'pegasus')
     def pdscFile = new File("$pegasusDir.path/ATypeRef.pdsc")
-    pdscFile << '''{
-    |  "type"      : "typeref",
-    |  "name"      : "ATypeRef",
-    |  "ref"       : "string",
-    |  "doc"       : "A type ref data."
-    |}
-    '''.stripMargin()
+    def pdscData = [
+            type: 'typeref',
+            name: 'ATypeRef',
+            ref:  'string',
+            doc:  'A type ref data.'
+    ]
+    pdscFile << JsonOutput.prettyPrint(JsonOutput.toJson(pdscData))
 
     when:
     def result = runner.build()
@@ -73,6 +70,9 @@ class PegasusPluginCacheabilityTest extends Specification {
     result.task(':mainGeneratedDataTemplateClasses').outcome ==  SUCCESS
     result.task(':mainTranslateSchemas').outcome == SUCCESS
     result.task(':mainDataTemplateJar').outcome == SUCCESS
+
+    def compiledSchema = new File(tempDir.root, 'build/classes/java/mainGeneratedDataTemplate/ATypeRef.class')
+    compiledSchema.exists()
 
     when:
     result = runner.build()

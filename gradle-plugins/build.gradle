@@ -1,9 +1,20 @@
 // Setup integTests
 apply from: "${buildScriptDirPath}/integTest.gradle"
 
+configurations {
+  dataTemplateForTesting
+  pegasusPluginForTesting
+}
+
 dependencies {
   testImplementation externalDependency.testng
   testImplementation externalDependency.junit
+
+  dataTemplateForTesting project(':data')
+  pegasusPluginForTesting project(':data')
+  pegasusPluginForTesting project(':data-avro-generator')
+  pegasusPluginForTesting project(':generator')
+  pegasusPluginForTesting project(':restli-tools')
 }
 
 // This is done so that the plugin can know which version of restli should be used when creating the pegasus configuration.
@@ -11,35 +22,28 @@ processResources {
   filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: ['version': project.version as String])
 }
 
-configurations {
-  localLibsForTesting
-}
+task resourcesDirWithoutPegasusVersionProperties(type: Sync) {
+  dependsOn processResources
+  description 'Creates a backup of the build/gradle-plugins/resources/main/ folder, ' +
+          'but excluding pegasus-version.properties. ' +
+          'This allows testing the version of pegasus jars in the current build.'
 
-dependencies {
-  localLibsForTesting project(':data')
-  localLibsForTesting project(':data-avro-generator')
-  localLibsForTesting project(':generator')
-  localLibsForTesting project(':restli-tools')
-  localLibsForTesting project(':pegasus-common')
-
-  // both ways work
-  localLibsForTesting externalDependency.codemodel     //localLibsForTesting 'com.sun.codemodel:codemodel:2.2'
-  localLibsForTesting externalDependency.slf4jApi
-  localLibsForTesting externalDependency.jacksonCore
-  localLibsForTesting externalDependency.commonsIo
-  localLibsForTesting externalDependency.jsr305      // for some reason this adds v3.0.2 instead of 3.0.0 -it's because 3.0.2 is in the PegasusPlugin.java
-  localLibsForTesting externalDependency.commonsCli
+  from(sourceSets.main.output.resourcesDir) {
+    exclude 'pegasus-version.properties'
+  }
+  into "$buildDir/$name"
 }
 
 tasks.pluginUnderTestMetadata {
-  logger.warn("==========  ASTRO ============")
-  logger.warn("==========   END  ============")
-  dependsOn configurations.localLibsForTesting
-  def libs = []
-  for (File f : configurations.localLibsForTesting.files) {
-    libs.add(f.parent)
-  }
-  pluginClasspath.from(libs)
+  dependsOn tasks.resourcesDirWithoutPegasusVersionProperties
 
-  //pluginClasspath.from(configurations.localLibsForTesting)
+  // allows us to test plugin application without the unpublished version set in pegasus-version.properties
+  // also we add the localLibsForTesting to avoid leaking dependencies in published metadata
+  pluginClasspath.setFrom(files(sourceSets.main.java.outputDir, sourceSets.main.groovy.outputDir, tasks.resourcesDirWithoutPegasusVersionProperties))
+}
+
+integTest {
+  dependsOn configurations.dataTemplateForTesting, configurations.pegasusPluginForTesting
+  systemProperty 'integTest.dataTemplateCompileDependencies', "'${configurations.dataTemplateForTesting.join("', '")}'"
+  systemProperty 'integTest.pegasusPluginDependencies', "'${configurations.pegasusPluginForTesting.join("', '")}'"
 }
