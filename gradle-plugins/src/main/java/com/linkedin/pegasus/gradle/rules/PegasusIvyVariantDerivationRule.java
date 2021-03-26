@@ -52,7 +52,20 @@ public class PegasusIvyVariantDerivationRule implements ComponentMetadataRule {
       return; // this component's metadata is not Ivy-based; bail out
     }
 
-    // for backwards-compatibility with older Ivy descriptors, first try to derive a variant from the dataTemplate configuration
+    // for backwards-compatibility with older Ivy descriptors, first try to derive variants from the dataTemplate configuration
+    context.getDetails().maybeAddVariant("dataTemplateRuntimeElements", "dataTemplate", variantMetadata -> {
+      variantMetadata.attributes(attributes -> {
+        attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.LIBRARY));
+        attributes.attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.class, LibraryElements.JAR));
+        attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.class, Usage.JAVA_RUNTIME));
+      });
+      ModuleVersionIdentifier id = context.getDetails().getId();
+      variantMetadata.withCapabilities(capabilities -> {
+        capabilities.removeCapability(id.getGroup(), id.getName()); // remove implicit capability from dataTemplateRuntimeElements to avoid conflicts with runtimeElements variant
+        capabilities.addCapability(id.getGroup(), id.getName() + "-data-template", id.getVersion());
+      });
+    });
+
     context.getDetails().maybeAddVariant("dataTemplateApiElements", "dataTemplate", variantMetadata -> {
       variantMetadata.attributes(attributes -> {
         attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.LIBRARY));
@@ -60,7 +73,10 @@ public class PegasusIvyVariantDerivationRule implements ComponentMetadataRule {
         attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.class, Usage.JAVA_API));
       });
       ModuleVersionIdentifier id = context.getDetails().getId();
-      variantMetadata.withCapabilities(capabilities -> capabilities.addCapability(id.getGroup(), id.getName() + "-data-template", id.getVersion()));
+      variantMetadata.withCapabilities(capabilities -> {
+        capabilities.removeCapability(id.getGroup(), id.getName()); // remove implicit capability from dataTemplateApiElements to avoid conflicts with apiElements variant
+        capabilities.addCapability(id.getGroup(), id.getName() + "-data-template", id.getVersion());
+      });
     });
 
     context.getDetails().maybeAddVariant("dataTemplateRuntimeElements", "mainGeneratedDataTemplateRuntimeElements", variantMetadata -> {

@@ -179,7 +179,7 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     def parentRunner = GradleRunner.create()
         .withProjectDir(parentProject.root)
         .withPluginClasspath()
-        .withArguments('publish', '-is')
+        .withArguments('outgoingVariants', 'publish', '-is')
         //.forwardOutput()
         //.withDebug(true)
 
@@ -270,7 +270,7 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     def childRunner = GradleRunner.create()
         .withProjectDir(childProject.root)
         .withPluginClasspath()
-        .withArguments('publish', '-is') //uploadDataTemplate
+        .withArguments('outgoingVariants', 'publish', '-is')
         //.forwardOutput()
         //.withDebug(true)
 
@@ -454,8 +454,8 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     def parentRunner = GradleRunner.create()
         .withProjectDir(parentProject.root)
         .withPluginClasspath()
-        .withArguments('publish', '-is')
-        //.forwardOutput()
+        .withArguments('outgoingVariants', 'publish', '-is')
+        .forwardOutput()
         //.withDebug(true)
 
     def parentResult = parentRunner.build()
@@ -505,13 +505,43 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     |  dataTemplateCompile files(${System.getProperty('integTest.dataTemplateCompileDependencies')})
     |  pegasusPlugin files(${System.getProperty('integTest.pegasusPluginDependencies')})
     |
+    |  //FIXME missing transitve dep on Grandparent's data-template jar
+    |  //  likely caused by discrepancy in dependency metadata when publishing using Upload task vs. ivy-publish plugin.
+    |  //  see diff of ivy/legacy/expectedParentIvyDescriptorContents.txt vs. ivy/legacyWithVariantDerivation/expectedParentIvyDescriptorContents.txt
     |  dataModel ('com.linkedin.pegasus-parent-demo:parent:1.0.0') {
     |    capabilities {
-    |      requireCapability('com.linkedin.pegasus-parent-demo:parent-data-template:1.0.0') // TODO Gradle 6.0 requires an explicit version, 6.? does not
+    |      requireCapability('com.linkedin.pegasus-parent-demo:parent-data-template') // TODO Gradle 6.0 requires an explicit version, 6.? does not
     |    }
     |  }
     |
     |  components.all(com.linkedin.pegasus.gradle.rules.PegasusIvyVariantDerivationRule)
+    |  components.all(IvyVariantDerivationRule)    
+    |}
+    |
+    |class IvyVariantDerivationRule implements ComponentMetadataRule {
+    |    @javax.inject.Inject ObjectFactory getObjects() { }
+    |
+    |    void execute(ComponentMetadataContext context) {
+    |        // This filters out any non Ivy module
+    |        if(context.getDescriptor(IvyModuleDescriptor) == null) {
+    |            return
+    |        }
+    |
+    |        context.details.addVariant("runtimeElements", "default") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_RUNTIME))
+    |            }
+    |        }
+    |        context.details.addVariant("apiElements", "compile") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_API))
+    |            }
+    |        }
+    |    }
     |}
     |
     |tasks.withType(GenerateModuleMetadata) { enabled=false }
