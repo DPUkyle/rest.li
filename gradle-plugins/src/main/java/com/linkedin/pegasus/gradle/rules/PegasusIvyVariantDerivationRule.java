@@ -1,5 +1,6 @@
 package com.linkedin.pegasus.gradle.rules;
 
+import org.gradle.api.GradleException;
 import org.gradle.api.artifacts.ComponentMetadataContext;
 import org.gradle.api.artifacts.ComponentMetadataRule;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
@@ -7,9 +8,18 @@ import org.gradle.api.artifacts.ivy.IvyModuleDescriptor;
 import org.gradle.api.attributes.Category;
 import org.gradle.api.attributes.LibraryElements;
 import org.gradle.api.attributes.Usage;
+import org.gradle.api.internal.artifacts.repositories.resolver.ComponentMetadataDetailsAdapter;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.internal.component.external.model.ivy.IvyDependencyDescriptor;
+import org.gradle.internal.component.external.model.ivy.IvyModuleResolveMetadata;
+import org.gradle.internal.component.external.model.ivy.MutableIvyModuleResolveMetadata;
+import org.gradle.internal.impldep.com.google.common.collect.Multimap;
 
 import javax.inject.Inject;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Rule for deriving Gradle variants from a software component which publishes pegasus jars.
@@ -46,6 +56,7 @@ public class PegasusIvyVariantDerivationRule implements ComponentMetadataRule {
     this.objects = objects;
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void execute(ComponentMetadataContext context) {
     if (context.getDescriptor(IvyModuleDescriptor.class) == null) {

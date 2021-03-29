@@ -210,6 +210,13 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |  dataModel group: 'com.linkedin.pegasus-parent-demo', name: 'parent', version: '1.0.0', configuration: 'dataTemplate'
     |}
     |
+    |generateDataTemplate {
+    |  doFirst {
+    |    logger.lifecycle 'Dumping {} classpath:', it.path
+    |    resolverPath.files.each { logger.lifecycle it.name }
+    |  }
+    |}
+    |    
     |//legacy publishing configuration
     |tasks.withType(Upload) {
     |  repositories {
@@ -238,7 +245,7 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
         .withProjectDir(childProject.root)
         .withPluginClasspath()
         .withArguments('uploadDataTemplate', 'uploadTestDataTemplate', 'uploadAvroSchema', 'uploadTestAvroSchema', 'uploadArchives', '-is')
-        //.forwardOutput()
+        .forwardOutput()
         //.withDebug(true)
 
     def childResult = childRunner.build()
@@ -375,17 +382,81 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |
     |  dataModel ('com.linkedin.pegasus-grandparent-demo:grandparent:1.0.0') {
     |    capabilities {
-    |      requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent-data-template:1.0.0')
+    |      //requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent')
+    |      requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent-data-template')
     |    }
     |  }
     |  components.all(com.linkedin.pegasus.gradle.rules.PegasusIvyVariantDerivationRule)
+    |  components.all(IvyVariantDerivationRule)
     |}
     |
+    |class IvyVariantDerivationRule implements ComponentMetadataRule {
+    |    @javax.inject.Inject ObjectFactory getObjects() { }
+    |
+    |    void execute(ComponentMetadataContext context) {
+    |        // This filters out any non Ivy module
+    |        if(context.getDescriptor(IvyModuleDescriptor) == null) {
+    |            return
+    |        }
+    |
+    |        context.details.addVariant("runtimeElements", "default") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_RUNTIME))
+    |            }
+    |        }
+    |        context.details.addVariant("apiElements", "compile") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_API))
+    |            }
+    |        }
+    |    }
+    |}
+    |
+    |// TODO as a consequence of opting-in to variant-aware resolution, I need to tweak my publication so that 
+    |//  it can be correctly consumed downstream 
+    |//  if a dependency has -data-template capability, remap conf dataModel->default to dataModel->dataTemplate
     |//legacy publishing configuration
     |tasks.withType(Upload) {
     |  repositories {
     |    ivy { url '$localIvyRepo' }
     |  }
+    |  doFirst {
+    |    logger.lifecycle '{} will upload to {}', path, descriptorDestination.absolutePath
+    |  }
+    |  doLast {
+    |    def originalText = descriptorDestination.text
+    |    def node = new XmlParser(true, false).parseText(originalText)
+    |    logger.lifecycle '** Found dependencies\\n{}', groovy.xml.XmlUtil.serialize(node.dependencies[0])
+    |    //node.dependencies[0].each {
+    |    node.dependencies[0].findAll { it.@conf.startsWith 'dataModel' }.each {
+    |      logger.lifecycle '** Found dependency {}', groovy.xml.XmlUtil.serialize(it)
+    |      def originalConf = it.@conf
+    |      def remappedConf = 'dataModel->dataTemplate'
+    |      logger.lifecycle '** Remapping conf element from {} to {}', originalConf, remappedConf
+    |      it.@conf = remappedConf
+    |    }
+    |    //descriptorDestination.text = groovy.xml.XmlUtil.serialize(node)
+    |    logger.lifecycle '** Dumping node: {}', groovy.xml.XmlUtil.serialize(node)
+    |    descriptorDestination.withWriter('UTF-8') { writer -> // FIXME this modifies build/ivy.xml _after_ the original was copied to the remote destination
+    |      groovy.xml.XmlUtil.serialize(node, writer)
+    |    }
+    |    logger.lifecycle '** Dumping modififed file: {}', descriptorDestination.text
+    |  }
+    |  doLast {
+    |    logger.lifecycle '{} was uploaded to {}', path, descriptorDestination.absolutePath
+    |  }
+    |  doLast {
+    |    // TERRIBLE HACK: copy local ivy.xml to local destination.  Don't do this in real life!
+    |    copy {
+    |      from descriptorDestination
+    |      into '${localIvyRepo.path}/com.linkedin.pegasus-parent-demo/parent/1.0.0/'
+    |      rename { 'ivy-1.0.0.xml' }
+    |    }
+    |  }      
     |}""".stripMargin()
 
     // Create a simple pdl schema which references a grandparent type
@@ -405,8 +476,8 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
         .withProjectDir(parentProject.root)
         .withPluginClasspath()
         .withArguments('uploadDataTemplate', 'uploadTestDataTemplate', 'uploadAvroSchema', 'uploadTestAvroSchema', 'uploadArchives', '-is')
-    //.forwardOutput()
-    //.withDebug(true)
+        .forwardOutput()
+        //.withDebug(true)
 
     def parentResult = parentRunner.build()
 
@@ -450,22 +521,103 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |  mavenCentral()
     |}
     |
+    |configurations {
+    |  //dataModel.resolutionStrategy.capabilitiesResolution.all { selectHighestVersion() }
+    |  //dataModel.resolutionStrategy.capabilitiesResolution.all { details ->
+    |  //  def candidates = details.candidates
+    |  //  def dataTemplateApiElementsVariant = candidates.find { it.variantName == 'dataTemplateApiElements' }
+    |  //  if (dataTemplateApiElementsVariant) { select(dataTemplateApiElementsVariant).because('Preferring dataTemplateApiElements variant') }
+    |  //}
+    |}
+    |
     |dependencies {
     |  dataTemplateCompile files(${System.getProperty('integTest.dataTemplateCompileDependencies')})
     |  pegasusPlugin files(${System.getProperty('integTest.pegasusPluginDependencies')})
     |
+    |  //dataModel 'com.linkedin.pegasus-parent-demo:parent:1.0.0'
     |  dataModel ('com.linkedin.pegasus-parent-demo:parent:1.0.0') {
     |    capabilities {
-    |      requireCapability('com.linkedin.pegasus-parent-demo:parent-data-template:1.0.0')
+    |      requireCapability('com.linkedin.pegasus-parent-demo:parent-data-template')
     |    }
     |  }
-    |  components.all(com.linkedin.pegasus.gradle.rules.PegasusIvyVariantDerivationRule)    
+    |
+    |  components.all(com.linkedin.pegasus.gradle.rules.PegasusIvyVariantDerivationRule)
+    |  components.all(IvyVariantDerivationRule)
     |}
     |
+    |class IvyVariantDerivationRule implements ComponentMetadataRule {
+    |    @javax.inject.Inject ObjectFactory getObjects() { }
+    |
+    |    void execute(ComponentMetadataContext context) {
+    |        // This filters out any non Ivy module
+    |        if(context.getDescriptor(IvyModuleDescriptor) == null) {
+    |            return
+    |        }
+    |
+    |        context.details.addVariant("runtimeElements", "default") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_RUNTIME))
+    |            }
+    |        }
+    |        context.details.addVariant("apiElements", "compile") {
+    |            attributes {
+    |                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, getObjects().named(LibraryElements, LibraryElements.JAR))
+    |                attribute(Category.CATEGORY_ATTRIBUTE, getObjects().named(Category, Category.LIBRARY))
+    |                attribute(Usage.USAGE_ATTRIBUTE, getObjects().named(Usage, Usage.JAVA_API))
+    |            }
+    |        }
+    |    }
+    |}
+    |
+    |generateDataTemplate {
+    |  doFirst {
+    |    logger.lifecycle 'Dumping {} classpath:', it.path
+    |    resolverPath.files.each { logger.lifecycle it.name }
+    |  }
+    |}
+    |
+    |// TODO as a consequence of opting-in to variant-aware resolution, I need to tweak my publication so that 
+    |//  it can be correctly consumed downstream 
+    |//  if a dependency has -data-template capability, remap conf dataModel->default to dataModel->dataTemplate
     |//legacy publishing configuration
     |tasks.withType(Upload) {
     |  repositories {
     |    ivy { url '$localIvyRepo' }
+    |  }
+    |  doFirst {
+    |    logger.lifecycle '{} will upload to {}', path, descriptorDestination.absolutePath
+    |  }
+    |  doLast {
+    |    def originalText = descriptorDestination.text
+    |    def node = new XmlParser(true, false).parseText(originalText)
+    |    logger.lifecycle '** Found dependencies\\\\n{}', groovy.xml.XmlUtil.serialize(node.dependencies[0])
+    |    //node.dependencies[0].each {
+    |    node.dependencies[0].findAll { it.@conf.startsWith 'dataModel' }.each {
+    |      logger.lifecycle '** Found dependency {}', groovy.xml.XmlUtil.serialize(it)
+    |      def originalConf = it.@conf
+    |      def remappedConf = 'dataModel->dataTemplate'
+    |      logger.lifecycle '** Remapping conf element from {} to {}', originalConf, remappedConf
+    |      it.@conf = remappedConf
+    |    }
+    |    //descriptorDestination.text = groovy.xml.XmlUtil.serialize(node)
+    |    logger.lifecycle '** Dumping node: {}', groovy.xml.XmlUtil.serialize(node)
+    |    descriptorDestination.withWriter('UTF-8') { writer -> // FIXME this modifies build/ivy.xml _after_ the original was copied to the remote destination
+    |      groovy.xml.XmlUtil.serialize(node, writer)
+    |    }
+    |    logger.lifecycle '** Dumping modififed file: {}', descriptorDestination.text
+    |  }
+    |  doLast {
+    |    logger.lifecycle '{} was uploaded to {}', path, descriptorDestination.absolutePath
+    |  }
+    |  doLast {
+    |    // TERRIBLE HACK: copy local ivy.xml to local destination.  Don't do this in real life!
+    |    copy {
+    |      from descriptorDestination
+    |      into '${localIvyRepo.path}/com.linkedin.pegasus-child-demo/child/1.0.0/'
+    |      rename { 'ivy-1.0.0.xml' }
+    |    }
     |  }
     |}""".stripMargin()
 
@@ -490,8 +642,8 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
         .withProjectDir(childProject.root)
         .withPluginClasspath()
         .withArguments('uploadDataTemplate', 'uploadTestDataTemplate', 'uploadAvroSchema', 'uploadTestAvroSchema', 'uploadArchives', '-is')
-    //.forwardOutput()
-    //.withDebug(true)
+        .forwardOutput()
+        //.withDebug(true)
 
     def childResult = childRunner.build()
 

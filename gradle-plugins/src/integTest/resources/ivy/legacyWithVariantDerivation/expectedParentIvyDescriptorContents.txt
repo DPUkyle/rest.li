@@ -67,7 +67,7 @@
     <artifact name="parent-test-data-template" type="jar" ext="jar" conf="testDataTemplate"/>
   </publications>
   <dependencies>
-    <dependency org="com.linkedin.pegasus-grandparent-demo" name="grandparent" rev="1.0.0" conf="dataModel-&gt;default"/>
+    <dependency org="com.linkedin.pegasus-grandparent-demo" name="grandparent" rev="1.0.0" conf="dataModel-&gt;dataTemplate"/>
     <dependency org="com.google.code.findbugs" name="jsr305" rev="3.0.2" conf="dataTemplateCompile-&gt;default"/>
     <dependency org="org.slf4j" name="slf4j-simple" rev="1.7.2" conf="pegasusPlugin-&gt;default"/>
   </dependencies>

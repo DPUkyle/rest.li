@@ -237,6 +237,13 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     |  }    
     |}
     |
+    |generateDataTemplate {
+    |  doFirst {
+    |    logger.lifecycle 'Dumping {} classpath:', it.path
+    |    resolverPath.files.each { logger.lifecycle it.name }
+    |  }
+    |}
+    |    
     |//modern ivy-publish configuration
     |publishing {
     |  publications {
@@ -271,7 +278,7 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
         .withProjectDir(childProject.root)
         .withPluginClasspath()
         .withArguments('outgoingVariants', 'publish', '-is')
-        //.forwardOutput()
+        .forwardOutput()
         //.withDebug(true)
 
     def childResult = childRunner.build()
@@ -416,7 +423,7 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     |
     |  dataModel ('com.linkedin.pegasus-grandparent-demo:grandparent:1.0.0') {
     |    capabilities {
-    |      requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent-data-template:1.0.0') // TODO Gradle 6.0 requires an explicit version, 6.? does not
+    |      requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent-data-template') // TODO Gradle 6.0 requires an explicit version, 6.? does not
     |    }
     |  }
     |
@@ -546,6 +553,13 @@ class PegasusPluginIvyPublishIntegrationTest extends Specification {
     |
     |tasks.withType(GenerateModuleMetadata) { enabled=false }
     |
+    |generateDataTemplate {
+    |  doFirst {
+    |    logger.lifecycle 'Dumping {} classpath:', it.path
+    |    resolverPath.files.each { logger.lifecycle it.name }
+    |  }
+    |}
+    |    
     |//modern ivy-publish configuration
     |publishing {
     |  publications {
