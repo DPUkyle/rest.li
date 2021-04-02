@@ -331,8 +331,8 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
         .withProjectDir(grandparentProject.root)
         .withPluginClasspath()
         .withArguments('uploadDataTemplate', 'uploadTestDataTemplate', 'uploadAvroSchema', 'uploadTestAvroSchema', 'uploadArchives', '-is')
-    //.forwardOutput()
-    //.withDebug(true)
+        .forwardOutput()
+        .withDebug(true)
 
     def grandparentResult = grandparentRunner.build()
 
@@ -366,7 +366,7 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     settingsFile = parentProject.newFile('settings.gradle')
     settingsFile << "rootProject.name = 'parent'"
 
-    parentProject.newFile('build.gradle') << """
+    parentProject.newFile('build.gradle') << """import com.linkedin.pegasus.gradle.rules.RestLiUsage
     |plugins {
     |  id 'pegasus'
     |}
@@ -381,6 +381,8 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |  pegasusPlugin files(${System.getProperty('integTest.pegasusPluginDependencies')})
     |
     |  dataModel ('com.linkedin.pegasus-grandparent-demo:grandparent:1.0.0') {
+    |    //attributes { attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, "dataTemplate")) }
+    |    attributes { attribute(RestLiUsage.RESTLI_USAGE_ATTRIBUTE, objects.named(RestLiUsage.class, RestLiUsage.DATA_TEMPLATE)) }
     |    capabilities {
     |      //requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent')
     |      requireCapability('com.linkedin.pegasus-grandparent-demo:grandparent-data-template')
@@ -509,9 +511,22 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |'''.stripMargin()
 
     settingsFile = childProject.newFile('settings.gradle')
-    settingsFile << "rootProject.name = 'child'"
+    settingsFile << '''
+    |plugins {
+    |  id 'com.gradle.enterprise' version '3.6'
+    |}
+    |
+    |rootProject.name = 'child'
+    |
+    |gradleEnterprise {
+    |  buildScan {
+    |    termsOfServiceUrl = 'https://gradle.com/terms-of-service'
+    |    termsOfServiceAgree = 'yes'
+    |    publishAlways()
+    |  }
+    |}'''.stripMargin()
 
-    childProject.newFile('build.gradle') << """
+    childProject.newFile('build.gradle') << """import com.linkedin.pegasus.gradle.rules.RestLiUsage
     |plugins {
     |  id 'pegasus'
     |}
@@ -534,15 +549,22 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
     |  dataTemplateCompile files(${System.getProperty('integTest.dataTemplateCompileDependencies')})
     |  pegasusPlugin files(${System.getProperty('integTest.pegasusPluginDependencies')})
     |
-    |  //dataModel 'com.linkedin.pegasus-parent-demo:parent:1.0.0'
     |  dataModel ('com.linkedin.pegasus-parent-demo:parent:1.0.0') {
     |    capabilities {
+    |      attributes { attribute(RestLiUsage.RESTLI_USAGE_ATTRIBUTE, objects.named(RestLiUsage.class, RestLiUsage.DATA_TEMPLATE)) }
     |      requireCapability('com.linkedin.pegasus-parent-demo:parent-data-template')
     |    }
     |  }
     |
     |  components.all(com.linkedin.pegasus.gradle.rules.PegasusIvyVariantDerivationRule)
     |  components.all(IvyVariantDerivationRule)
+    |
+    |  attributesSchema { 
+    |    attribute(com.linkedin.pegasus.gradle.rules.RestLiUsage.RESTLI_USAGE_ATTRIBUTE) {
+    |      compatibilityRules.add(com.linkedin.pegasus.gradle.rules.RestLiFeatureAttributeCompatibilityRule)
+    |      disambiguationRules.add(com.linkedin.pegasus.gradle.rules.RestLiFeatureAttributeDisambiguationRule)
+    |    }
+    |  }
     |}
     |
     |class IvyVariantDerivationRule implements ComponentMetadataRule {
@@ -643,7 +665,7 @@ class PegasusPluginLegacyIvyPublishIntegrationTest extends Specification {
         .withPluginClasspath()
         .withArguments('uploadDataTemplate', 'uploadTestDataTemplate', 'uploadAvroSchema', 'uploadTestAvroSchema', 'uploadArchives', '-is')
         .forwardOutput()
-        //.withDebug(true)
+        .withDebug(true)
 
     def childResult = childRunner.build()
 

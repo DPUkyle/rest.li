@@ -18,6 +18,9 @@ package com.linkedin.pegasus.gradle;
 
 import com.linkedin.pegasus.gradle.PegasusOptions.IdlOptions;
 import com.linkedin.pegasus.gradle.internal.CompatibilityLogChecker;
+import com.linkedin.pegasus.gradle.rules.RestLiFeatureAttributeCompatibilityRule;
+import com.linkedin.pegasus.gradle.rules.RestLiFeatureAttributeDisambiguationRule;
+import com.linkedin.pegasus.gradle.rules.RestLiUsage;
 import com.linkedin.pegasus.gradle.tasks.ChangedFileReportTask;
 import com.linkedin.pegasus.gradle.tasks.CheckIdlTask;
 import com.linkedin.pegasus.gradle.tasks.CheckPegasusSnapshotTask;
@@ -64,6 +67,8 @@ import org.gradle.api.plugins.JavaPlatformPlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.publish.PublishingExtension;
+import org.gradle.api.publish.ivy.IvyPublication;
 import org.gradle.api.publish.ivy.plugins.IvyPublishPlugin;
 import org.gradle.api.tasks.Copy;
 import org.gradle.api.tasks.Delete;
@@ -1876,6 +1881,12 @@ public class PegasusPlugin implements Plugin<Project>
           legacyConfiguration.extend(p.getConfigurations().getByName(targetSourceSet.getRuntimeElementsConfigurationName()).getName());
         }));
       });
+
+      // finally, register our attribute compatibility rule FIXME ineffective
+      project.getDependencies().attributesSchema(schema -> schema.attribute(RestLiUsage.RESTLI_USAGE_ATTRIBUTE, matchingStrategy -> {
+        matchingStrategy.getCompatibilityRules().add(RestLiFeatureAttributeCompatibilityRule.class);
+        matchingStrategy.getDisambiguationRules().add(RestLiFeatureAttributeDisambiguationRule.class);
+      }));
     });
 
     if (debug)
